@@ -176,7 +176,7 @@ export default function AdminDashboard() {
         const firstAppointment = userAppointments[0]
         
         return {
-          id: userId,
+          id: userId.toString(),
           email: firstAppointment?.user_email || 'No email',
           full_name: firstAppointment?.user_name || 'No name',
           phone: firstAppointment?.phone || 'No phone',
@@ -537,7 +537,7 @@ export default function AdminDashboard() {
       const servicePrice = appointment.service_price || 1000 // Default price if not set
       const advanceAmount = Math.round(servicePrice * 0.3) // 30% advance
       
-      const message = `💰 *Payment Reminder - Computer World*\n\nService: ${appointment.service_type}\nBooking ID: ${appointment.id.substring(0, 8)}...\n\nTotal Amount: ₹${servicePrice}\nAdvance Payment: ₹${advanceAmount}\n\nPay online: https://computerworld.up.railway.app/dashboard\n\nCall: +91-93162 56101`
+      const message = `💰 *Payment Reminder - Computer World*\n\nService: ${appointment.service_type}\nBooking ID: ${appointment.id.toString().substring(0, 8)}...\n\nTotal Amount: ₹${servicePrice}\nAdvance Payment: ₹${advanceAmount}\n\nPay online: https://computerworld.up.railway.app/dashboard\n\nCall: +91-93162 56101`
 
       await fetch('/api/whatsapp', {
         method: 'POST',
@@ -1192,7 +1192,7 @@ export default function AdminDashboard() {
                                           📞
                                         </a>
                                         <a
-                                          href={`https://wa.me/91${appointment.phone}?text=Hi, regarding your Computer World appointment ${appointment.id.substring(0, 8)}...`}
+                                          href={`https://wa.me/91${appointment.phone}?text=Hi, regarding your Computer World appointment ${appointment.id.toString().substring(0, 8)}...`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-xs p-1 rounded"
@@ -1722,7 +1722,7 @@ export default function AdminDashboard() {
                                   {appointment.service_type}
                                 </div>
                                 <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  ID: {appointment.id.substring(0, 8)}...
+                                  ID: {appointment.id.toString().substring(0, 8)}...
                                 </div>
                               </div>
                             </td>
@@ -1917,7 +1917,7 @@ export default function AdminDashboard() {
                     📞 Call Customer
                   </a>
                   <a
-                    href={`https://wa.me/91${selectedAppointment.phone}?text=Hi! This is Computer World regarding your ${selectedAppointment.service_type} appointment (ID: ${selectedAppointment.id.substring(0, 8)}). How can I assist you?`}
+                    href={`https://wa.me/91${selectedAppointment.phone}?text=Hi! This is Computer World regarding your ${selectedAppointment.service_type} appointment (ID: ${selectedappointment.id.toString().substring(0, 8)}). How can I assist you?`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg text-center font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
@@ -2007,7 +2007,7 @@ export default function AdminDashboard() {
 
               {/* Communication Actions */}
               <a
-                href={`mailto:${selectedAppointment.user_email}?subject=Computer World - Appointment ${selectedAppointment.id.substring(0, 8)}&body=Hi,%0D%0A%0D%0ARegarding your ${selectedAppointment.service_type} appointment scheduled for ${selectedAppointment.preferred_date} at ${selectedAppointment.preferred_time}.%0D%0A%0D%0ABest regards,%0D%0AComputer World Team%0D%0A+91-93162 56101`}
+                href={`mailto:${selectedAppointment.user_email}?subject=Computer World - Appointment ${selectedappointment.id.toString().substring(0, 8)}&body=Hi,%0D%0A%0D%0ARegarding your ${selectedAppointment.service_type} appointment scheduled for ${selectedAppointment.preferred_date} at ${selectedAppointment.preferred_time}.%0D%0A%0D%0ABest regards,%0D%0AComputer World Team%0D%0A+91-93162 56101`}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                 target="_blank"
               >
