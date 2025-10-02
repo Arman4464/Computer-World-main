@@ -1408,7 +1408,7 @@ export default function AdminDashboard() {
                       <div className="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                         <div>
                           <p className="text-sm text-blue-700 dark:text-blue-400">Average Response Time</p>
-                          <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">< 2 hrs</p>
+                          <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">Under 2 hrs</p>
                         </div>
                         <div className="text-3xl">âš¡</div>
                       </div>
