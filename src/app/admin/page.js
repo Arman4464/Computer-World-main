@@ -39,6 +39,11 @@ export default function AdminDashboard() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Helper function to get short ID
+  const getShortId = (id) => {
+    return id ? id.toString().substring(0, 8) : 'N/A'
+  }
+
   useEffect(() => {
     checkAdminAccess()
   }, [])
@@ -127,15 +132,15 @@ export default function AdminDashboard() {
             
             return {
               ...apt,
-              user_email: userData?.user?.email || 'No email',
-              user_name: userData?.user?.user_metadata?.full_name || userData?.user?.email?.split('@')[0] || 'No name'
+              user_email: userData?.user?.email || apt.user_email || 'No email',
+              user_name: userData?.user?.user_metadata?.full_name || apt.user_name || userData?.user?.email?.split('@')[0] || 'No name'
             }
           } catch {
-            // If auth.admin is not available, use placeholder data
+            // If auth.admin is not available, use existing data or placeholder
             return {
               ...apt,
-              user_email: `user-${apt.user_id.substring(0, 8)}@registered.com`,
-              user_name: `Customer ${apt.phone}`
+              user_email: apt.user_email || `user-${getShortId(apt.user_id)}@registered.com`,
+              user_name: apt.user_name || `Customer ${apt.phone}`
             }
           }
         })
@@ -155,19 +160,7 @@ export default function AdminDashboard() {
 
   const fetchUsers = async (appointments) => {
     try {
-      // Try user_profiles first
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (!profilesError && profiles && profiles.length > 0) {
-        setAllUsers(profiles)
-        setStats(prev => ({ ...prev, totalUsers: profiles.length }))
-        return
-      }
-
-      // Fallback: Extract unique users from appointments
+      // Skip user_profiles query - use appointments data directly
       console.log('Using appointments to extract user data...')
       const uniqueUserIds = [...new Set(appointments.map(apt => apt.user_id))]
       
@@ -259,8 +252,8 @@ export default function AdminDashboard() {
           
           if (payload.eventType === 'INSERT') {
             // New appointment notification
-            toast.success('🔔 New appointment received!', {
-              description: `Service: ${payload.new.service_type} • Phone: +91-${payload.new.phone}`,
+            toast.success('ðŸ”” New appointment received!', {
+              description: `Service: ${payload.new.service_type} â€¢ Phone: +91-${payload.new.phone}`,
               duration: 8000,
               action: {
                 label: 'View',
@@ -273,7 +266,7 @@ export default function AdminDashboard() {
             
             // Browser notification
             if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('New Computer World Appointment! 🔧', {
+              new Notification('New Computer World Appointment! ðŸ”§', {
                 body: `${payload.new.service_type} service requested from +91-${payload.new.phone}`,
                 icon: '/favicon.ico',
                 tag: 'new-appointment',
@@ -291,12 +284,12 @@ export default function AdminDashboard() {
             }
             
           } else if (payload.eventType === 'UPDATE') {
-            toast.info('📝 Appointment updated', {
-              description: `Status: ${payload.new.status} • Payment: ${payload.new.payment_status}`,
+            toast.info('ðŸ“ Appointment updated', {
+              description: `Status: ${payload.new.status} â€¢ Payment: ${payload.new.payment_status}`,
               duration: 4000
             })
           } else if (payload.eventType === 'DELETE') {
-            toast.error('🗑️ Appointment deleted', { duration: 3000 })
+            toast.error('ðŸ—‘ï¸ Appointment deleted', { duration: 3000 })
           }
           
           // Refresh data after any change
@@ -305,25 +298,8 @@ export default function AdminDashboard() {
       )
       .subscribe()
 
-    // Subscribe to user profile changes
-    const usersSubscription = supabase
-      .channel('admin-user-profiles')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'user_profiles' }, 
-        (payload) => {
-          console.log('New user registered:', payload)
-          toast.success('👤 New user registered!', {
-            description: `Email: ${payload.new.email}`,
-            duration: 5000
-          })
-          fetchAllData()
-        }
-      )
-      .subscribe()
-
     return () => {
       appointmentsSubscription.unsubscribe()
-      usersSubscription.unsubscribe()
     }
   }
 
@@ -341,7 +317,7 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      toast.success(`✅ Appointment status updated to ${newStatus}`)
+      toast.success(`âœ… Appointment status updated to ${newStatus}`)
       
       // Close modal if open
       if (selectedAppointment?.id === appointmentId) {
@@ -354,7 +330,7 @@ export default function AdminDashboard() {
         try {
           const statusMessages = {
             'in-progress': 'Our technician is now working on your computer repair.',
-            'completed': 'Your computer service has been completed successfully! ✅',
+            'completed': 'Your computer service has been completed successfully! âœ…',
             'cancelled': 'Your appointment has been cancelled. Contact us for rescheduling.'
           }
 
@@ -362,12 +338,12 @@ export default function AdminDashboard() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              message: `🔧 *Computer World Update*\n\n${statusMessages[newStatus]}\n\nService: ${appointment.service_type}\nBooking ID: ${appointmentId.substring(0, 8)}...\n\nFor queries: +91-93162 56101`,
+              message: `ðŸ”§ *Computer World Update*\\n\\n${statusMessages[newStatus]}\\n\\nService: ${appointment.service_type}\\nBooking ID: ${getShortId(appointmentId)}...\\n\\nFor queries: +91-93162 56101`,
               phoneNumber: `91${appointment.phone}`
             })
           })
           
-          toast.success('📱 Customer notified via WhatsApp')
+          toast.success('ðŸ“± Customer notified via WhatsApp')
           
         } catch (notifError) {
           console.log('WhatsApp notification failed (non-critical):', notifError)
@@ -398,7 +374,7 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      toast.success('📝 Technician notes added successfully')
+      toast.success('ðŸ“ Technician notes added successfully')
       setTechnicianNotes('')
 
       // Update selected appointment if it's open
@@ -417,7 +393,7 @@ export default function AdminDashboard() {
   }
 
   const deleteAppointment = async (appointmentId) => {
-    if (!confirm('⚠️ Are you sure you want to DELETE this appointment?\n\nThis action CANNOT be undone and will permanently remove:\n• Appointment details\n• Payment information\n• Technician notes\n\nType "DELETE" to confirm:')) {
+    if (!confirm('âš ï¸ Are you sure you want to DELETE this appointment?\\n\\nThis action CANNOT be undone and will permanently remove:\\nâ€¢ Appointment details\\nâ€¢ Payment information\\nâ€¢ Technician notes\\n\\nType "DELETE" to confirm:')) {
       return
     }
 
@@ -437,7 +413,7 @@ export default function AdminDashboard() {
 
       if (error) throw error
 
-      toast.success('🗑️ Appointment permanently deleted')
+      toast.success('ðŸ—‘ï¸ Appointment permanently deleted')
       
       if (selectedAppointment?.id === appointmentId) {
         setSelectedAppointment(null)
@@ -457,21 +433,21 @@ export default function AdminDashboard() {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission()
       if (permission === 'granted') {
-        toast.success('🔔 Browser notifications enabled!')
+        toast.success('ðŸ”” Browser notifications enabled!')
         
         // Test notification
         setTimeout(() => {
-          new Notification('Test Notification 🧪', {
+          new Notification('Test Notification ðŸ§ª', {
             body: 'You will now receive real-time appointment notifications!',
             icon: '/favicon.ico'
           })
         }, 1000)
         
       } else {
-        toast.error('❌ Browser notifications denied')
+        toast.error('âŒ Browser notifications denied')
       }
     } else {
-      toast.error('❌ Browser notifications not supported')
+      toast.error('âŒ Browser notifications not supported')
     }
   }
 
@@ -490,9 +466,6 @@ export default function AdminDashboard() {
         'Status': apt.status,
         'Payment Status': apt.payment_status,
         'Service Price': apt.service_price || 'N/A',
-        'Advance Payment': apt.advance_payment || 'N/A',
-        'Payment Method': apt.payment_method || 'N/A',
-        'Payment Date': apt.payment_date ? new Date(apt.payment_date).toLocaleString('en-IN') : 'N/A',
         'Created At': new Date(apt.created_at).toLocaleString('en-IN'),
         'Updated At': apt.updated_at ? new Date(apt.updated_at).toLocaleString('en-IN') : 'N/A',
         'Technician Notes': apt.technician_notes?.replace(/"/g, '""') || 'N/A'
@@ -508,10 +481,10 @@ export default function AdminDashboard() {
               : value
           ).join(',')
         )
-      ].join('\n')
+      ].join('\\n')
 
       // Add BOM for proper UTF-8 encoding
-      const BOM = '\uFEFF'
+      const BOM = '\\uFEFF'
       const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -522,7 +495,7 @@ export default function AdminDashboard() {
       document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
 
-      toast.success(`📊 ${csvData.length} appointments exported to CSV`)
+      toast.success(`ðŸ“Š ${csvData.length} appointments exported to CSV`)
       
     } catch (error) {
       console.error('Export error:', error)
@@ -537,7 +510,7 @@ export default function AdminDashboard() {
       const servicePrice = appointment.service_price || 1000 // Default price if not set
       const advanceAmount = Math.round(servicePrice * 0.3) // 30% advance
       
-      const message = `💰 *Payment Reminder - Computer World*\n\nService: ${appointment.service_type}\nBooking ID: ${appointment.id.toString().substring(0, 8)}...\n\nTotal Amount: ₹${servicePrice}\nAdvance Payment: ₹${advanceAmount}\n\nPay online: https://computerworld.up.railway.app/dashboard\n\nCall: +91-93162 56101`
+      const message = `ðŸ’° *Payment Reminder - Computer World*\\n\\nService: ${appointment.service_type}\\nBooking ID: ${getShortId(appointment.id)}...\\n\\nTotal Amount: â‚¹${servicePrice}\\nAdvance Payment: â‚¹${advanceAmount}\\n\\nPay online: https://computerworld.up.railway.app/dashboard\\n\\nCall: +91-93162 56101`
 
       await fetch('/api/whatsapp', {
         method: 'POST',
@@ -548,7 +521,7 @@ export default function AdminDashboard() {
         })
       })
 
-      toast.success('📱 Payment reminder sent via WhatsApp')
+      toast.success('ðŸ“± Payment reminder sent via WhatsApp')
       
     } catch (error) {
       console.error('Payment reminder error:', error)
@@ -642,7 +615,7 @@ export default function AdminDashboard() {
       appointment.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appointment.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appointment.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      appointment.id?.toLowerCase().includes(searchTerm.toLowerCase())
+      appointment.id?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     
     return matchesStatus && matchesPayment && matchesSearch
   })
@@ -663,7 +636,7 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex items-center justify-center">
         <div className="text-center max-w-md mx-auto">
-          <div className="text-8xl mb-6">🔒</div>
+          <div className="text-8xl mb-6">ðŸ”’</div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-dark-text mb-4">Access Denied</h2>
           <p className="text-gray-600 dark:text-gray-300 mb-8">You don't have permission to access the admin dashboard. Please contact the administrator if you believe this is an error.</p>
           <div className="space-y-4">
@@ -708,7 +681,7 @@ export default function AdminDashboard() {
                 onClick={requestNotificationPermission}
                 className="hidden md:block text-gray-600 dark:text-dark-text hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors text-sm bg-gray-100 dark:bg-dark-bg px-3 py-2 rounded-lg font-medium"
               >
-                🔔 Enable Alerts
+                ðŸ”” Enable Alerts
               </button>
               <DarkModeToggle />
               <Link href="/dashboard" className="text-gray-600 dark:text-dark-text hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors hidden md:block">
@@ -739,7 +712,7 @@ export default function AdminDashboard() {
             { 
               title: 'Total Appointments', 
               value: stats.totalAppointments, 
-              icon: '📋', 
+              icon: 'ðŸ“‹', 
               color: 'blue', 
               change: `+${stats.todayAppointments} today`,
               trend: stats.todayAppointments > 0 ? 'up' : 'neutral'
@@ -747,7 +720,7 @@ export default function AdminDashboard() {
             { 
               title: 'Pending', 
               value: stats.pending, 
-              icon: '⏳', 
+              icon: 'â³', 
               color: 'yellow', 
               urgent: stats.pending > 5,
               change: stats.pending > 0 ? 'Needs attention' : 'All clear'
@@ -755,28 +728,28 @@ export default function AdminDashboard() {
             { 
               title: 'In Progress', 
               value: stats.inProgress, 
-              icon: '🔧', 
+              icon: 'ðŸ”§', 
               color: 'blue',
               change: 'Active services'
             },
             { 
               title: 'Completed', 
               value: stats.completed, 
-              icon: '✅', 
+              icon: 'âœ…', 
               color: 'green',
               change: `${stats.completionRate}% completion rate`
             },
             { 
               title: 'Revenue', 
               value: formatCurrency(stats.totalRevenue), 
-              icon: '💰', 
+              icon: 'ðŸ’°', 
               color: 'green',
               change: `${formatCurrency(stats.thisMonthRevenue)} this month`
             },
             { 
               title: 'Users', 
               value: stats.totalUsers, 
-              icon: '👥', 
+              icon: 'ðŸ‘¥', 
               color: 'purple',
               change: 'Registered customers'
             }
@@ -800,7 +773,7 @@ export default function AdminDashboard() {
               </div>
               {stat.urgent && (
                 <div className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium">
-                  ⚠️ Requires immediate attention
+                  âš ï¸ Requires immediate attention
                 </div>
               )}
             </div>
@@ -815,7 +788,7 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab('appointments')}
               className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-sm font-medium relative"
             >
-              📋 Appointments
+              ðŸ“‹ Appointments
               {stats.pending > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                   {stats.pending}
@@ -826,37 +799,37 @@ export default function AdminDashboard() {
               onClick={exportAppointments}
               className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-sm font-medium"
             >
-              📊 Export ({filteredAppointments.length})
+              ðŸ“Š Export ({filteredAppointments.length})
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
               className="bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-4 py-3 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors text-sm font-medium"
             >
-              📈 Analytics
+              ðŸ“ˆ Analytics
             </button>
             <button
               onClick={() => setActiveTab('users')}
               className="bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 px-4 py-3 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors text-sm font-medium"
             >
-              👥 Users ({stats.totalUsers})
+              ðŸ‘¥ Users ({stats.totalUsers})
             </button>
             <a
               href="tel:+919316256101"
               className="bg-gray-50 dark:bg-gray-900/20 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors text-sm font-medium text-center"
             >
-              📞 Call Owner
+              ðŸ“ž Call Owner
             </a>
             <button
               onClick={fetchAllData}
               className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 px-4 py-3 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors text-sm font-medium"
             >
-              🔄 Refresh
+              ðŸ”„ Refresh
             </button>
             <button
               onClick={() => setActiveTab('payments')}
               className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-4 py-3 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors text-sm font-medium"
             >
-              💳 Payments
+              ðŸ’³ Payments
             </button>
           </div>
         </div>
@@ -866,11 +839,11 @@ export default function AdminDashboard() {
           <div className="border-b border-gray-200 dark:border-dark-border">
             <nav className="flex space-x-8 px-6 overflow-x-auto">
               {[
-                { id: 'overview', name: 'Overview', icon: '📊' },
-                { id: 'appointments', name: 'Appointments', icon: '📋', badge: stats.pending > 0 ? stats.pending : null },
-                { id: 'users', name: 'Users', icon: '👥', count: stats.totalUsers },
-                { id: 'analytics', name: 'Analytics', icon: '📈' },
-                { id: 'payments', name: 'Payments', icon: '💳', count: stats.paidAppointments }
+                { id: 'overview', name: 'Overview', icon: 'ðŸ“Š' },
+                { id: 'appointments', name: 'Appointments', icon: 'ðŸ“‹', badge: stats.pending > 0 ? stats.pending : null },
+                { id: 'users', name: 'Users', icon: 'ðŸ‘¥', count: stats.totalUsers },
+                { id: 'analytics', name: 'Analytics', icon: 'ðŸ“ˆ' },
+                { id: 'payments', name: 'Payments', icon: 'ðŸ’³', count: stats.paidAppointments }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -917,19 +890,19 @@ export default function AdminDashboard() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-green-700 dark:text-green-400">Database</span>
-                        <span className="text-green-800 dark:text-green-300 font-medium">✅ Online</span>
+                        <span className="text-green-800 dark:text-green-300 font-medium">âœ… Online</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-green-700 dark:text-green-400">Real-time Updates</span>
-                        <span className="text-green-800 dark:text-green-300 font-medium">✅ Active</span>
+                        <span className="text-green-800 dark:text-green-300 font-medium">âœ… Active</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-green-700 dark:text-green-400">Payment Gateway</span>
-                        <span className="text-green-800 dark:text-green-300 font-medium">✅ InstaMojo</span>
+                        <span className="text-green-800 dark:text-green-300 font-medium">âœ… InstaMojo</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-green-700 dark:text-green-400">Notifications</span>
-                        <span className="text-green-800 dark:text-green-300 font-medium">✅ WhatsApp</span>
+                        <span className="text-green-800 dark:text-green-300 font-medium">âœ… WhatsApp</span>
                       </div>
                     </div>
                   </div>
@@ -937,7 +910,7 @@ export default function AdminDashboard() {
                   {/* Today's Summary */}
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center space-x-3 mb-4">
-                      <span className="text-2xl">📅</span>
+                      <span className="text-2xl">ðŸ“…</span>
                       <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300">Today's Activity</h3>
                     </div>
                     <div className="space-y-3">
@@ -961,7 +934,7 @@ export default function AdminDashboard() {
                   {/* Revenue Overview */}
                   <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
                     <div className="flex items-center space-x-3 mb-4">
-                      <span className="text-2xl">💰</span>
+                      <span className="text-2xl">ðŸ’°</span>
                       <h3 className="text-lg font-semibold text-purple-800 dark:text-purple-300">Revenue</h3>
                     </div>
                     <div className="space-y-3">
@@ -989,14 +962,14 @@ export default function AdminDashboard() {
                       onClick={() => setActiveTab('appointments')}
                       className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300 font-medium text-sm bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded-lg transition-colors"
                     >
-                      View All ({allAppointments.length}) →
+                      View All ({allAppointments.length}) â†’
                     </button>
                   </div>
                   
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {recentAppointments.length === 0 ? (
                       <div className="col-span-2 text-center py-12">
-                        <div className="text-6xl mb-4">📋</div>
+                        <div className="text-6xl mb-4">ðŸ“‹</div>
                         <h4 className="text-xl font-semibold text-gray-900 dark:text-dark-text mb-2">No appointments yet</h4>
                         <p className="text-gray-500 dark:text-gray-400">New appointments will appear here automatically.</p>
                       </div>
@@ -1015,7 +988,7 @@ export default function AdminDashboard() {
                               <div className="flex-1">
                                 <h4 className="font-semibold text-gray-900 dark:text-dark-text text-lg">{appointment.service_type}</h4>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {appointment.user_email} • +91-{appointment.phone}
+                                  {appointment.user_email} â€¢ +91-{appointment.phone}
                                 </p>
                               </div>
                               {urgency && (
@@ -1027,11 +1000,11 @@ export default function AdminDashboard() {
                             
                             <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                               <div>
-                                <span className="text-gray-500 dark:text-gray-400">📅 Date:</span>
+                                <span className="text-gray-500 dark:text-gray-400">ðŸ“… Date:</span>
                                 <span className="ml-1 font-medium text-gray-900 dark:text-dark-text">{appointment.preferred_date}</span>
                               </div>
                               <div>
-                                <span className="text-gray-500 dark:text-gray-400">⏰ Time:</span>
+                                <span className="text-gray-500 dark:text-gray-400">â° Time:</span>
                                 <span className="ml-1 font-medium text-gray-900 dark:text-dark-text">{appointment.preferred_time}</span>
                               </div>
                             </div>
@@ -1091,7 +1064,7 @@ export default function AdminDashboard() {
                       <option value="cancelled">Cancelled ({stats.cancelled})</option>
                     </select>
 
-                                        <select
+                    <select
                       value={filterPayment}
                       onChange={(e) => setFilterPayment(e.target.value)}
                       className="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
@@ -1122,7 +1095,7 @@ export default function AdminDashboard() {
                         {filteredAppointments.length === 0 ? (
                           <tr>
                             <td colSpan="6" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                              <div className="text-6xl mb-4">📋</div>
+                              <div className="text-6xl mb-4">ðŸ“‹</div>
                               <h4 className="text-lg font-semibold mb-2">No appointments found</h4>
                               <p className="text-sm">
                                 {searchTerm || filterStatus !== 'all' || filterPayment !== 'all'
@@ -1189,15 +1162,15 @@ export default function AdminDashboard() {
                                           href={`tel:+91${appointment.phone}`}
                                           className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-xs p-1 rounded"
                                         >
-                                          📞
+                                          ðŸ“ž
                                         </a>
                                         <a
-                                          href={`https://wa.me/91${appointment.phone}?text=Hi, regarding your Computer World appointment ${appointment.id.toString().substring(0, 8)}...`}
+                                          href={`https://wa.me/91${appointment.phone}?text=Hi, regarding your Computer World appointment ${getShortId(appointment.id)}...`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-xs p-1 rounded"
                                         >
-                                          💬
+                                          ðŸ’¬
                                         </a>
                                       </div>
                                     </div>
@@ -1226,7 +1199,7 @@ export default function AdminDashboard() {
                                     </span>
                                     {appointment.technician_notes && (
                                       <div className="text-xs text-blue-600 dark:text-blue-400">
-                                        📝 Has notes
+                                        ðŸ“ Has notes
                                       </div>
                                     )}
                                   </div>
@@ -1241,51 +1214,50 @@ export default function AdminDashboard() {
                                         {formatCurrency(appointment.service_price)}
                                       </div>
                                     )}
-                                    {appointment.advance_payment && (
-                                      <div className="text-xs text-green-600 dark:text-green-400">
-                                        Advance: {formatCurrency(appointment.advance_payment)}
-                                      </div>
-                                    )}
                                   </div>
                                 </td>
-                                <td className="px-6 py-4">
-                                  <div className="flex flex-col space-y-2">
+                                                                <td className="px-6 py-4">
+                                  <div className="flex flex-col space-y-1">
                                     <button
                                       onClick={() => setSelectedAppointment(appointment)}
-                                      className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300 font-medium text-sm text-left"
+                                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs font-medium bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded transition-colors"
                                     >
-                                      View Details
+                                      ðŸ“‹ View Details
                                     </button>
                                     
-                                    {appointment.status === 'pending' && (
-                                      <button
-                                        onClick={() => updateAppointmentStatus(appointment.id, 'in-progress')}
+                                    <div className="flex space-x-1">
+                                      <select
+                                        value={appointment.status}
+                                        onChange={(e) => updateAppointmentStatus(appointment.id, e.target.value)}
                                         disabled={loadingAction === `status-${appointment.id}`}
-                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium text-sm text-left disabled:opacity-50"
+                                        className="text-xs border border-gray-300 dark:border-dark-border rounded px-2 py-1 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-1 focus:ring-yellow-500"
                                       >
-                                        {loadingAction === `status-${appointment.id}` ? '⏳ Starting...' : '🔧 Start Service'}
-                                      </button>
-                                    )}
-                                    
-                                    {appointment.status === 'in-progress' && (
+                                        <option value="pending">Pending</option>
+                                        <option value="in-progress">In Progress</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                      </select>
+                                      
+                                      {appointment.payment_status === 'pending' && (
+                                        <button
+                                          onClick={() => sendPaymentReminder(appointment)}
+                                          disabled={loadingAction === `payment-${appointment.id}`}
+                                          className="text-xs bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                          title="Send payment reminder"
+                                        >
+                                          ðŸ’°
+                                        </button>
+                                      )}
+                                      
                                       <button
-                                        onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
-                                        disabled={loadingAction === `status-${appointment.id}`}
-                                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 font-medium text-sm text-left disabled:opacity-50"
+                                        onClick={() => deleteAppointment(appointment.id)}
+                                        disabled={loadingAction === `delete-${appointment.id}`}
+                                        className="text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                        title="Delete appointment"
                                       >
-                                        {loadingAction === `status-${appointment.id}` ? '⏳ Completing...' : '✅ Complete'}
+                                        ðŸ—‘ï¸
                                       </button>
-                                    )}
-                                    
-                                    {appointment.payment_status === 'pending' && (
-                                      <button
-                                        onClick={() => sendPaymentReminder(appointment)}
-                                        disabled={loadingAction === `payment-${appointment.id}`}
-                                        className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 font-medium text-sm text-left disabled:opacity-50"
-                                      >
-                                        {loadingAction === `payment-${appointment.id}` ? '⏳ Sending...' : '💳 Payment Link'}
-                                      </button>
-                                    )}
+                                    </div>
                                   </div>
                                 </td>
                               </tr>
@@ -1295,23 +1267,6 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
-                  
-                  {/* Table Footer */}
-                  {filteredAppointments.length > 0 && (
-                    <div className="bg-gray-50 dark:bg-dark-bg px-6 py-3 border-t border-gray-200 dark:border-dark-border">
-                      <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
-                        <span>
-                          Showing {filteredAppointments.length} of {allAppointments.length} appointments
-                        </span>
-                        <button
-                          onClick={exportAppointments}
-                          className="text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300 font-medium"
-                        >
-                          📊 Export Filtered Results ({filteredAppointments.length})
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1321,111 +1276,75 @@ export default function AdminDashboard() {
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Registered Users</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Customer Management</h2>
                     <p className="text-gray-600 dark:text-gray-300">
-                      Total: {allUsers.length} registered customers
+                      {allUsers.length} registered customers
                     </p>
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    Average appointments per user: {stats.totalUsers > 0 ? (stats.totalAppointments / stats.totalUsers).toFixed(1) : 0}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allUsers.length === 0 ? (
-                    <div className="col-span-full text-center py-16">
-                      <div className="text-6xl mb-4">👥</div>
-                      <h4 className="text-xl font-semibold text-gray-900 dark:text-dark-text mb-2">No users found</h4>
-                      <p className="text-gray-500 dark:text-gray-400">Users will appear here when they register and book appointments.</p>
+                    <div className="col-span-3 text-center py-12">
+                      <div className="text-6xl mb-4">ðŸ‘¥</div>
+                      <h4 className="text-xl font-semibold text-gray-900 dark:text-dark-text mb-2">No customers yet</h4>
+                      <p className="text-gray-500 dark:text-gray-400">Customer data will appear here as appointments are created.</p>
                     </div>
                   ) : (
-                    allUsers.map(user => {
-                      const userAppointments = allAppointments.filter(apt => apt.user_id === user.id)
-                      const completedAppointments = userAppointments.filter(apt => apt.status === 'completed')
-                      const totalSpent = user.total_spent || completedAppointments.reduce((sum, apt) => sum + (parseFloat(apt.service_price) || 0), 0)
-                      const lastAppointment = userAppointments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
-
-                      return (
-                        <div key={user.id} className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border hover:shadow-md transition-shadow">
-                          <div className="flex items-center space-x-4 mb-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-md">
-                              <span className="text-white font-bold text-lg">
-                                {user.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || '?'}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-gray-900 dark:text-dark-text truncate">
-                                {user.full_name || user.user_name || 'No Name Set'}
-                              </h3>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{user.email}</p>
-                            </div>
+                    allUsers.map(user => (
+                      <div key={user.id} className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text">
+                              {user.full_name}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{user.email}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">+91-{user.phone}</p>
                           </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                            <div>
-                              <p className="text-gray-500 dark:text-gray-400">Member Since</p>
-                              <p className="font-medium text-gray-900 dark:text-dark-text">
-                                {formatDate(user.created_at).split(',')[0]}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500 dark:text-gray-400">Phone</p>
-                              <p className="font-medium text-gray-900 dark:text-dark-text">
-                                {user.phone ? `+91-${user.phone}` : 'Not provided'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500 dark:text-gray-400">Appointments</p>
-                              <div className="flex items-center space-x-1">
-                                <p className="font-medium text-gray-900 dark:text-dark-text">
-                                  {user.appointment_count || userAppointments.length}
-                                </p>
-                                <span className="text-xs text-gray-400">
-                                  ({completedAppointments.length} completed)
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <p className="text-gray-500 dark:text-gray-400">Total Spent</p>
-                              <p className="font-medium text-green-600 dark:text-green-400">
-                                {formatCurrency(totalSpent)}
-                              </p>
-                            </div>
+                          <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center">
+                            <span className="text-yellow-600 dark:text-yellow-400 font-bold">
+                              {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                            </span>
                           </div>
-
-                          {lastAppointment && (
-                            <div className="mb-4 p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Last Service</p>
-                              <p className="text-sm font-medium text-gray-900 dark:text-dark-text">
-                                {lastAppointment.service_type}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {formatRelativeTime(lastAppointment.created_at)}
-                              </p>
-                            </div>
-                          )}
-
-                          {user.phone && (
-                            <div className="flex space-x-2">
-                              <a
-                                href={`tel:+91${user.phone}`}
-                                className="flex-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-3 py-2 rounded-lg text-sm font-medium text-center hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                              >
-                                📞 Call
-                              </a>
-                              <a
-                                href={`https://wa.me/91${user.phone}?text=Hi! This is Computer World. We appreciate your business and wanted to check if you need any technical support.`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm font-medium text-center hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                              >
-                                💬 WhatsApp
-                              </a>
-                            </div>
-                          )}
                         </div>
-                      )
-                    })
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-400">Appointments:</span>
+                            <span className="ml-1 font-medium text-gray-900 dark:text-dark-text">
+                              {user.appointment_count}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 dark:text-gray-400">Total Spent:</span>
+                            <span className="ml-1 font-medium text-green-600 dark:text-green-400">
+                              {formatCurrency(user.total_spent)}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                          Joined {formatDate(user.created_at)}
+                        </div>
+                        
+                        <div className="mt-4 flex space-x-2">
+                          <a
+                            href={`tel:+91${user.phone}`}
+                            className="flex-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-center py-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-sm font-medium"
+                          >
+                            ðŸ“ž Call
+                          </a>
+                          <a
+                            href={`https://wa.me/91${user.phone}?text=Hi ${user.full_name}, thank you for choosing Computer World!`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-center py-2 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-sm font-medium"
+                          >
+                            ðŸ’¬ WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
@@ -1434,185 +1353,75 @@ export default function AdminDashboard() {
             {/* Analytics Tab */}
             {activeTab === 'analytics' && (
               <div className="space-y-8">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Business Analytics & Insights</h2>
-                
-                {/* Key Metrics Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-300">Completion Rate</h3>
-                      <span className="text-2xl">✅</span>
-                    </div>
-                    <div className="text-3xl font-bold text-blue-900 dark:text-blue-200 mb-2">
-                      {stats.completionRate}%
-                    </div>
-                    <p className="text-sm text-blue-700 dark:text-blue-400">
-                      {stats.completed} of {stats.totalAppointments} appointments completed
-                    </p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-6 rounded-xl border border-green-200 dark:border-green-800">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Average Revenue</h3>
-                      <span className="text-2xl">💰</span>
-                    </div>
-                    <div className="text-2xl font-bold text-green-900 dark:text-green-200 mb-2">
-                      {stats.paidAppointments > 0 ? formatCurrency(stats.totalRevenue / stats.paidAppointments) : '₹0'}
-                    </div>
-                    <p className="text-sm text-green-700 dark:text-green-400">
-                      Per completed service
-                    </p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-purple-800 dark:text-purple-300">Customer Retention</h3>
-                      <span className="text-2xl">🔄</span>
-                    </div>
-                    <div className="text-3xl font-bold text-purple-900 dark:text-purple-200 mb-2">
-                      {stats.totalUsers > 0 ? Math.round((stats.totalAppointments / stats.totalUsers) * 100) / 100 : 0}x
-                    </div>
-                    <p className="text-sm text-purple-700 dark:text-purple-400">
-                      Average appointments per user
-                    </p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-orange-800 dark:text-orange-300">Monthly Growth</h3>
-                      <span className="text-2xl">📈</span>
-                    </div>
-                    <div className="text-2xl font-bold text-orange-900 dark:text-orange-200 mb-2">
-                      {formatCurrency(stats.thisMonthRevenue)}
-                    </div>
-                    <p className="text-sm text-orange-700 dark:text-orange-400">
-                      This month's revenue
-                    </p>
-                  </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">Business Analytics</h2>
+                  <p className="text-gray-600 dark:text-gray-300">Detailed insights and performance metrics</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Service Breakdown */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Service Distribution */}
                   <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Service Breakdown</h3>
-                    <div className="space-y-4">
-                      {['Screen Replacement', 'Virus Removal', 'Hardware Repair', 'Data Recovery', 'Software Installation'].map(service => {
-                        const count = allAppointments.filter(apt => apt.service_type === service).length
-                        const percentage = allAppointments.length > 0 ? ((count / allAppointments.length) * 100) : 0
-                        const revenue = allAppointments
-                          .filter(apt => apt.service_type === service && apt.status === 'completed' && apt.payment_status === 'paid')
-                          .reduce((sum, apt) => sum + (parseFloat(apt.service_price) || 0), 0)
-
-                        return (
-                          <div key={service}>
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{service}</span>
-                              <span className="text-sm font-bold text-gray-900 dark:text-dark-text">{count}</span>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Service Distribution</h3>
+                    <div className="space-y-3">
+                      {Object.entries(
+                        allAppointments.reduce((acc, apt) => {
+                          acc[apt.service_type] = (acc[apt.service_type] || 0) + 1
+                          return acc
+                        }, {})
+                      )
+                        .sort(([,a], [,b]) => b - a)
+                        .slice(0, 5)
+                        .map(([service, count]) => {
+                          const percentage = (count / allAppointments.length * 100).toFixed(1)
+                          return (
+                            <div key={service} className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-gray-900 dark:text-dark-text">{service}</span>
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">{count} ({percentage}%)</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                  <div 
+                                    className="bg-yellow-500 h-2 rounded-full transition-all"
+                                    style={{ width: `${percentage}%` }}
+                                  ></div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                              <div
-                                className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${percentage}%` }}
-                              ></div>
-                            </div>
-                            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                              <span>{percentage.toFixed(1)}% of appointments</span>
-                              <span>Revenue: {formatCurrency(revenue)}</span>
-                            </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
                     </div>
                   </div>
 
-                  {/* Status Distribution */}
+                  {/* Monthly Trends */}
                   <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Status Distribution</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Monthly Performance</h3>
                     <div className="space-y-4">
-                      {[
-                        { status: 'pending', label: 'Pending', count: stats.pending, color: 'bg-yellow-500', textColor: 'text-yellow-600' },
-                        { status: 'in-progress', label: 'In Progress', count: stats.inProgress, color: 'bg-blue-500', textColor: 'text-blue-600' },
-                        { status: 'completed', label: 'Completed', count: stats.completed, color: 'bg-green-500', textColor: 'text-green-600' },
-                        { status: 'cancelled', label: 'Cancelled', count: stats.cancelled, color: 'bg-red-500', textColor: 'text-red-600' }
-                      ].map(item => {
-                        const percentage = stats.totalAppointments > 0 ? ((item.count / stats.totalAppointments) * 100) : 0
-                        return (
-                          <div key={item.status}>
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
-                              <span className={`text-sm font-bold ${item.textColor}`}>{item.count}</span>
-                            </div>
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                              <div
-                                className={`${item.color} h-2 rounded-full transition-all duration-500`}
-                                style={{ width: `${percentage}%` }}
-                              ></div>
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {percentage.toFixed(1)}% of total appointments
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Payment Analytics */}
-                  <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-sm border border-gray-100 dark:border-dark-border">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Payment Analytics</h3>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <span className="text-sm font-medium text-green-700 dark:text-green-400">Total Revenue</span>
-                        <span className="text-lg font-bold text-green-800 dark:text-green-300">
-                          {formatCurrency(stats.totalRevenue)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Paid Appointments</span>
-                        <span className="text-lg font-bold text-blue-800 dark:text-blue-300">
-                          {stats.paidAppointments}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-sm font-medium text-orange-700 dark:text-orange-400">Pending Payments</span>
-                        <span className="text-lg font-bold text-orange-800 dark:text-orange-300">
-                          {stats.unpaidAppointments}
-                        </span>
+                      <div className="flex justify-between items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div>
+                          <p className="text-sm text-green-700 dark:text-green-400">Completion Rate</p>
+                          <p className="text-2xl font-bold text-green-800 dark:text-green-300">{stats.completionRate}%</p>
+                        </div>
+                        <div className="text-3xl">âœ…</div>
                       </div>
                       
-                      <div className="pt-4 border-t border-gray-200 dark:border-dark-border">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-900 dark:text-dark-text">
-                            {stats.totalAppointments > 0 ? Math.round((stats.paidAppointments / stats.totalAppointments) * 100) : 0}%
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">Payment Success Rate</div>
+                      <div className="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <div>
+                          <p className="text-sm text-blue-700 dark:text-blue-400">Average Response Time</p>
+                          <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">< 2 hrs</p>
                         </div>
+                        <div className="text-3xl">âš¡</div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Business Insights */}
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 p-6 rounded-xl border border-gray-200 dark:border-gray-800">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">💡 Business Insights</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
-                    <div>
-                      <div className="text-2xl font-bold text-blue-600">{stats.todayAppointments}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Today's New Bookings</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-green-600">{stats.completionRate}%</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Service Completion Rate</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-purple-600">{stats.totalUsers}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Total Customers</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-yellow-600">
-                        {stats.paidAppointments > 0 ? Math.round((stats.totalRevenue / stats.paidAppointments)) : 0}
+                      
+                      <div className="flex justify-between items-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <div>
+                          <p className="text-sm text-purple-700 dark:text-purple-400">Customer Retention</p>
+                          <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">
+                            {((allUsers.filter(u => u.appointment_count > 1).length / allUsers.length) * 100 || 0).toFixed(0)}%
+                          </p>
+                        </div>
+                        <div className="text-3xl">ðŸ”„</div>
                       </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Avg. Service Value (₹)</div>
                     </div>
                   </div>
                 </div>
@@ -1626,167 +1435,113 @@ export default function AdminDashboard() {
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Payment Management</h2>
                     <p className="text-gray-600 dark:text-gray-300">
-                      InstaMojo Gateway • Same-day payouts enabled
+                      {stats.paidAppointments} paid, {stats.unpaidAppointments} pending
                     </p>
-                  </div>
-                  <div className="flex items-center space-x-2 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-sm text-green-700 dark:text-green-300 font-medium">Payment Gateway Active</span>
                   </div>
                 </div>
 
-                {/* Payment Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 p-6 rounded-xl border border-green-200 dark:border-green-800">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-200 dark:border-green-800">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-green-600 dark:text-green-400 font-medium">Total Revenue</p>
-                        <p className="text-3xl font-bold text-green-800 dark:text-green-300">
+                        <p className="text-green-700 dark:text-green-400 text-sm font-medium">Total Revenue</p>
+                        <p className="text-2xl font-bold text-green-800 dark:text-green-300">
                           {formatCurrency(stats.totalRevenue)}
                         </p>
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                          From {stats.paidAppointments} paid services
-                        </p>
                       </div>
-                      <div className="text-3xl">💰</div>
+                      <div className="text-3xl">ðŸ’°</div>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
+                  <div className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">This Month</p>
+                        <p className="text-orange-700 dark:text-orange-400 text-sm font-medium">Pending Payments</p>
+                        <p className="text-2xl font-bold text-orange-800 dark:text-orange-300">
+                          {stats.unpaidAppointments}
+                        </p>
+                      </div>
+                      <div className="text-3xl">â³</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-blue-700 dark:text-blue-400 text-sm font-medium">This Month</p>
                         <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
                           {formatCurrency(stats.thisMonthRevenue)}
                         </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                          {Math.round((stats.thisMonthRevenue / (stats.totalRevenue || 1)) * 100)}% of total
-                        </p>
                       </div>
-                      <div className="text-3xl">📅</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-orange-600 dark:text-orange-400 font-medium">Pending Payments</p>
-                        <p className="text-2xl font-bold text-orange-800 dark:text-orange-300">{stats.unpaidAppointments}</p>
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                          Awaiting payment
-                        </p>
-                      </div>
-                      <div className="text-3xl">⏳</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-purple-600 dark:text-purple-400 font-medium">Success Rate</p>
-                        <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">
-                          {stats.totalAppointments > 0 ? Math.round((stats.paidAppointments / stats.totalAppointments) * 100) : 0}%
-                        </p>
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                          Payment completion
-                        </p>
-                      </div>
-                      <div className="text-3xl">📊</div>
+                      <div className="text-3xl">ðŸ“Š</div>
                     </div>
                   </div>
                 </div>
 
-                {/* Payment Transactions Table */}
                 <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm border border-gray-100 dark:border-dark-border">
-                  <div className="px-6 py-4 border-b border-gray-200 dark:border-dark-border">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text">Recent Payment Transactions</h3>
+                  <div className="px-6 py-4 bg-gray-50 dark:bg-dark-bg border-b border-gray-200 dark:border-dark-border">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text">Payment Details</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-dark-border">
                       <thead className="bg-gray-50 dark:bg-dark-bg">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Appointment</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Service</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Customer</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Payment Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-dark-border">
-                        {allAppointments.filter(apt => apt.service_price || apt.payment_status !== 'pending').slice(0, 20).map(appointment => (
-                          <tr key={appointment.id} className="hover:bg-gray-50 dark:hover:bg-dark-bg">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>
+                        {allAppointments
+                          .filter(apt => apt.service_price > 0 || apt.payment_status !== 'pending')
+                          .map(appointment => (
+                            <tr key={appointment.id} className="hover:bg-gray-50 dark:hover:bg-dark-bg transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-medium text-gray-900 dark:text-dark-text">
                                   {appointment.service_type}
                                 </div>
                                 <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  ID: {appointment.id.toString().substring(0, 8)}...
+                                  ID: {getShortId(appointment.id)}
                                 </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-dark-text">
-                                {appointment.user_email || 'No email'}
-                              </div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                +91-{appointment.phone}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900 dark:text-dark-text">
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900 dark:text-dark-text">
+                                  {appointment.user_email}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  +91-{appointment.phone}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-dark-text">
                                 {appointment.service_price ? formatCurrency(appointment.service_price) : 'Not set'}
-                              </div>
-                              {appointment.advance_payment && (
-                                <div className="text-xs text-green-600 dark:text-green-400">
-                                  Advance: {formatCurrency(appointment.advance_payment)}
-                                </div>
-                              )}
-                              {appointment.payment_method && (
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  Via: {appointment.payment_method}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(appointment.payment_status)}`}>
-                                {appointment.payment_status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-dark-text">
-                              {appointment.payment_date 
-                                ? formatDate(appointment.payment_date)
-                                : appointment.created_at ? formatDate(appointment.created_at) : 'N/A'
-                              }
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm space-y-1">
-                              <button
-                                onClick={() => setSelectedAppointment(appointment)}
-                                className="block text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300 font-medium"
-                              >
-                                View Details
-                              </button>
-                              {appointment.payment_status === 'pending' && (
-                                <button
-                                  onClick={() => sendPaymentReminder(appointment)}
-                                  disabled={loadingAction === `payment-${appointment.id}`}
-                                  className="block text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 font-medium disabled:opacity-50"
-                                >
-                                  {loadingAction === `payment-${appointment.id}` ? 'Sending...' : 'Send Payment Link'}
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                        {allAppointments.filter(apt => apt.service_price || apt.payment_status !== 'pending').length === 0 && (
-                          <tr>
-                            <td colSpan="6" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                              <div className="text-4xl mb-2">💳</div>
-                              <p>No payment transactions yet</p>
-                            </td>
-                          </tr>
-                        )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(appointment.payment_status)}`}>
+                                  {appointment.payment_status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {formatDate(appointment.created_at)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {appointment.payment_status === 'pending' && (
+                                  <button
+                                    onClick={() => sendPaymentReminder(appointment)}
+                                    disabled={loadingAction === `payment-${appointment.id}`}
+                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg transition-colors disabled:opacity-50 text-xs"
+                                  >
+                                    ðŸ’¬ Send Reminder
+                                  </button>
+                                )}
+                                {appointment.payment_status === 'paid' && (
+                                  <span className="text-green-600 dark:text-green-400 text-xs">âœ… Completed</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>
@@ -1797,508 +1552,182 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Appointment Detail Modal */}
-      {selectedAppointment && !showPaymentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-dark-card p-8 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Appointment Details</h2>
-              <button
-                onClick={() => setSelectedAppointment(null)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                ×
-              </button>
+      {/* Appointment Details Modal */}
+      {selectedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-dark-card rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 dark:border-dark-border">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">
+                  Appointment Details
+                </h2>
+                <button
+                  onClick={() => setSelectedAppointment(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-2xl"
+                >
+                  Ã—
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                ID: {selectedAppointment.id} â€¢ Created {formatRelativeTime(selectedAppointment.created_at)}
+              </p>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <div className="p-6 space-y-6">
               {/* Service Information */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Service Information</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Service:</span>
-                    <span className="text-gray-900 dark:text-dark-text font-semibold">{selectedAppointment.service_type}</span>
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Service Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Service Type:</span>
+                    <p className="font-medium text-gray-900 dark:text-dark-text">{selectedAppointment.service_type}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Status:</span>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(selectedAppointment.status)}`}>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                    <p className={`font-medium ${getStatusColor(selectedAppointment.status)} inline-block px-2 py-1 rounded mt-1`}>
                       {selectedAppointment.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Payment Status:</span>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getPaymentStatusColor(selectedAppointment.payment_status)}`}>
-                      {selectedAppointment.payment_status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Scheduled Date:</span>
-                    <span className="text-gray-900 dark:text-dark-text font-semibold">{selectedAppointment.preferred_date}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Time Slot:</span>
-                    <span className="text-gray-900 dark:text-dark-text font-semibold">{selectedAppointment.preferred_time}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Booking Date:</span>
-                    <span className="text-gray-900 dark:text-dark-text">{formatDate(selectedAppointment.created_at)}</span>
-                  </div>
-                  {selectedAppointment.service_price && (
-                    <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                      <span className="font-medium text-green-600 dark:text-green-400">Service Price:</span>
-                      <span className="text-green-800 dark:text-green-300 font-bold text-lg">
-                        {formatCurrency(selectedAppointment.service_price)}
-                      </span>
-                    </div>
-                  )}
-                  {selectedAppointment.advance_payment && (
-                    <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <span className="font-medium text-blue-600 dark:text-blue-400">Advance Paid:</span>
-                      <span className="text-blue-800 dark:text-blue-300 font-bold">
-                        {formatCurrency(selectedAppointment.advance_payment)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-3">Problem Description</h4>
-                  <div className="bg-gray-50 dark:bg-dark-bg p-4 rounded-lg border">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {selectedAppointment.description}
                     </p>
                   </div>
+                </div>
+                <div className="mt-3">
+                  <span className="text-gray-600 dark:text-gray-400">Description:</span>
+                  <p className="font-medium text-gray-900 dark:text-dark-text mt-1">{selectedAppointment.description}</p>
                 </div>
               </div>
 
               {/* Customer Information */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Customer Information</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Email:</span>
-                    <span className="text-gray-900 dark:text-dark-text">{selectedAppointment.user_email || 'No email'}</span>
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Customer Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                    <p className="font-medium text-gray-900 dark:text-dark-text">{selectedAppointment.user_name || 'Not provided'}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Name:</span>
-                    <span className="text-gray-900 dark:text-dark-text">{selectedAppointment.user_name || 'Not provided'}</span>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Email:</span>
+                    <p className="font-medium text-gray-900 dark:text-dark-text">{selectedAppointment.user_email || 'Not provided'}</p>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Phone:</span>
-                    <span className="text-gray-900 dark:text-dark-text font-semibold">+91-{selectedAppointment.phone}</span>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Phone:</span>
+                    <div className="flex items-center space-x-2">
+                      <p className="font-medium text-gray-900 dark:text-dark-text">+91-{selectedAppointment.phone}</p>
+                      <a
+                        href={`tel:+91${selectedAppointment.phone}`}
+                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-xs bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded"
+                      >
+                        ðŸ“ž
+                      </a>
+                      <a
+                        href={`https://wa.me/91${selectedAppointment.phone}?text=Hi, regarding your Computer World appointment ${getShortId(selectedAppointment.id)}...`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-xs bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded"
+                      >
+                        ðŸ’¬
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">City:</span>
-                    <span className="text-gray-900 dark:text-dark-text">{selectedAppointment.city}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-dark-bg rounded-lg">
-                    <span className="font-medium text-gray-600 dark:text-gray-300">Pincode:</span>
-                    <span className="text-gray-900 dark:text-dark-text">{selectedAppointment.pincode}</span>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h4 className="font-semibold text-gray-900 dark:text-dark-text mb-3">Service Address</h4>
-                  <div className="bg-gray-50 dark:bg-dark-bg p-4 rounded-lg border">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {selectedAppointment.address}<br />
-                      {selectedAppointment.city} - {selectedAppointment.pincode}, Gujarat
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Payment Status:</span>
+                    <p className={`font-medium ${getPaymentStatusColor(selectedAppointment.payment_status)} inline-block px-2 py-1 rounded mt-1`}>
+                      {selectedAppointment.payment_status}
                     </p>
                   </div>
                 </div>
-
-                {/* Quick Contact Actions */}
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                  <a
-                    href={`tel:+91${selectedAppointment.phone}`}
-                    className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg text-center font-medium hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors border border-green-200 dark:border-green-800"
-                  >
-                    📞 Call Customer
-                  </a>
-                  <a
-                    href={`https://wa.me/91${selectedAppointment.phone}?text=Hi! This is Computer World regarding your ${selectedAppointment.service_type} appointment (ID: ${selectedappointment.id.toString().substring(0, 8)}). How can I assist you?`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg text-center font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
-                  >
-                    💬 WhatsApp
-                  </a>
-                </div>
               </div>
-            </div>
 
-            {/* Technician Notes Section */}
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-dark-text mb-4">Technician Notes & Updates</h3>
-              
-              {selectedAppointment.technician_notes && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                  <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">📝 Existing Notes:</h4>
-                  <p className="text-blue-700 dark:text-blue-400 text-sm leading-relaxed">{selectedAppointment.technician_notes}</p>
-                </div>
-              )}
-
-              <div className="flex gap-4">
-                <textarea
-                  value={technicianNotes}
-                  onChange={(e) => setTechnicianNotes(e.target.value)}
-                  placeholder="Add technician notes (diagnosis, parts needed, estimated time, customer instructions, etc.)"
-                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-yellow-500 focus:border-transparent resize-none"
-                  rows="3"
-                />
-                <button
-                  onClick={() => {
-                    if (technicianNotes.trim()) {
-                      addTechnicianNotes(selectedAppointment.id, technicianNotes)
-                    }
-                  }}
-                  disabled={!technicianNotes.trim() || loadingAction === `notes-${selectedAppointment.id}`}
-                  className="bg-yellow-500 hover:bg-yellow-600 dark:bg-yellow-600 dark:hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loadingAction === `notes-${selectedAppointment.id}` ? 'Adding...' : 'Add Notes'}
-                </button>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="mt-8 flex flex-wrap gap-4 justify-center border-t border-gray-200 dark:border-dark-border pt-6">
-              {/* Status Update Buttons */}
-              {selectedAppointment.status === 'pending' && (
-                <button
-                  onClick={() => updateAppointmentStatus(selectedAppointment.id, 'in-progress')}
-                  disabled={loadingAction === `status-${selectedAppointment.id}`}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loadingAction === `status-${selectedAppointment.id}` ? '⏳ Starting Service...' : '🔧 Start Service'}
-                </button>
-              )}
-
-              {selectedAppointment.status === 'in-progress' && (
-                <button
-                  onClick={() => updateAppointmentStatus(selectedAppointment.id, 'completed')}
-                  disabled={loadingAction === `status-${selectedAppointment.id}`}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loadingAction === `status-${selectedAppointment.id}` ? '⏳ Completing...' : '✅ Mark Completed'}
-                </button>
-              )}
-
-              {['pending', 'in-progress'].includes(selectedAppointment.status) && (
-                <button
-                  onClick={() => updateAppointmentStatus(selectedAppointment.id, 'cancelled')}
-                  disabled={loadingAction === `status-${selectedAppointment.id}`}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loadingAction === `status-${selectedAppointment.id}` ? '⏳ Cancelling...' : '❌ Cancel Appointment'}
-                </button>
-              )}
-
-              {/* Payment Actions */}
-              {selectedAppointment.payment_status === 'pending' && (
-                <button
-                  onClick={() => sendPaymentReminder(selectedAppointment)}
-                  disabled={loadingAction === `payment-${selectedAppointment.id}`}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loadingAction === `payment-${selectedAppointment.id}` ? '⏳ Sending...' : '💳 Send Payment Reminder'}
-                </button>
-              )}
-
-              {/* Communication Actions */}
-              <a
-                href={`mailto:${selectedAppointment.user_email}?subject=Computer World - Appointment ${selectedappointment.id.toString().substring(0, 8)}&body=Hi,%0D%0A%0D%0ARegarding your ${selectedAppointment.service_type} appointment scheduled for ${selectedAppointment.preferred_date} at ${selectedAppointment.preferred_time}.%0D%0A%0D%0ABest regards,%0D%0AComputer World Team%0D%0A+91-93162 56101`}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                target="_blank"
-              >
-                📧 Send Email
-              </a>
-
-              <a
-                href={`https://maps.google.com/?q=${encodeURIComponent(selectedAppointment.address + ', ' + selectedAppointment.city + ', ' + selectedAppointment.pincode)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                📍 Open in Maps
-              </a>
-
-              {/* Danger Zone */}
-              <div className="w-full border-t border-red-200 dark:border-red-800 pt-4 mt-4">
-                <div className="flex justify-between items-center">
+              {/* Location & Schedule */}
+              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Location & Schedule</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-red-600 dark:text-red-400 font-medium text-sm">Danger Zone</p>
-                    <p className="text-red-500 dark:text-red-400 text-xs">Permanent actions cannot be undone</p>
+                    <span className="text-gray-600 dark:text-gray-400">Complete Address:</span>
+                    <p className="font-medium text-gray-900 dark:text-dark-text">
+                      {selectedAppointment.address}, {selectedAppointment.city} - {selectedAppointment.pincode}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${selectedAppointment.address}, ${selectedAppointment.city}, ${selectedAppointment.pincode}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center mt-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg transition-colors"
+                    >
+                      ðŸ—ºï¸ Open in Maps
+                    </a>
                   </div>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Preferred Date:</span>
+                      <p className="font-medium text-gray-900 dark:text-dark-text">{selectedAppointment.preferred_date}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Preferred Time:</span>
+                      <p className="font-medium text-gray-900 dark:text-dark-text">{selectedAppointment.preferred_time}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technician Notes */}
+              <div className="bg-gray-50 dark:bg-dark-bg p-4 rounded-lg border border-gray-200 dark:border-dark-border">
+                <h3 className="font-semibold text-gray-900 dark:text-dark-text mb-2">Technician Notes</h3>
+                {selectedAppointment.technician_notes ? (
+                  <div className="bg-white dark:bg-dark-card p-3 rounded border border-gray-200 dark:border-dark-border mb-3">
+                    <p className="text-sm text-gray-900 dark:text-dark-text">{selectedAppointment.technician_notes}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">No notes added yet.</p>
+                )}
+                
+                <div className="flex space-x-2">
+                  <textarea
+                    value={technicianNotes}
+                    onChange={(e) => setTechnicianNotes(e.target.value)}
+                    placeholder="Add technician notes..."
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-yellow-500 focus:border-transparent resize-none"
+                    rows="3"
+                  />
                   <button
-                    onClick={() => deleteAppointment(selectedAppointment.id)}
-                    disabled={loadingAction === `delete-${selectedAppointment.id}`}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    onClick={() => addTechnicianNotes(selectedAppointment.id, technicianNotes)}
+                    disabled={!technicianNotes.trim() || loadingAction === `notes-${selectedAppointment.id}`}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                   >
-                    {loadingAction === `delete-${selectedAppointment.id}` ? '⏳ Deleting...' : '🗑️ Delete Permanently'}
+                    {loadingAction === `notes-${selectedAppointment.id}` ? '...' : 'Add Note'}
                   </button>
                 </div>
               </div>
 
-              {/* Close Button */}
-              <div className="w-full flex justify-center pt-4">
-                <button
-                  onClick={() => setSelectedAppointment(null)}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-medium transition-colors"
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <select
+                  value={selectedAppointment.status}
+                  onChange={(e) => updateAppointmentStatus(selectedAppointment.id, e.target.value)}
+                  disabled={loadingAction === `status-${selectedAppointment.id}`}
+                  className="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                 >
-                  Close Details
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Modal */}
-      {showPaymentModal && selectedAppointment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-dark-card p-8 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Payment Management</h2>
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {/* Appointment Summary */}
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-2">Appointment Summary</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-yellow-700 dark:text-yellow-400">Service:</span>
-                    <span className="ml-2 font-medium">{selectedAppointment.service_type}</span>
-                  </div>
-                  <div>
-                    <span className="text-yellow-700 dark:text-yellow-400">Customer:</span>
-                    <span className="ml-2 font-medium">{selectedAppointment.user_email}</span>
-                  </div>
-                  <div>
-                    <span className="text-yellow-700 dark:text-yellow-400">Phone:</span>
-                    <span className="ml-2 font-medium">+91-{selectedAppointment.phone}</span>
-                  </div>
-                  <div>
-                    <span className="text-yellow-700 dark:text-yellow-400">Date:</span>
-                    <span className="ml-2 font-medium">{selectedAppointment.preferred_date}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Status */}
-              <div className={`p-4 rounded-lg border ${
-                selectedAppointment.payment_status === 'paid' 
-                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                  : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800'
-              }`}>
-                <h3 className={`font-semibold mb-2 ${
-                  selectedAppointment.payment_status === 'paid'
-                    ? 'text-green-800 dark:text-green-300'
-                    : 'text-orange-800 dark:text-orange-300'
-                }`}>
-                  Payment Status: {selectedAppointment.payment_status.toUpperCase()}
-                </h3>
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
                 
-                {selectedAppointment.service_price && (
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600 dark:text-gray-400">Total Amount:</span>
-                      <span className="ml-2 font-bold text-lg">{formatCurrency(selectedAppointment.service_price)}</span>
-                    </div>
-                    {selectedAppointment.advance_payment && (
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">Advance Paid:</span>
-                        <span className="ml-2 font-bold text-green-600">{formatCurrency(selectedAppointment.advance_payment)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {selectedAppointment.payment_date && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                    Paid on: {formatDate(selectedAppointment.payment_date)}
-                  </p>
-                )}
-              </div>
-
-              {/* Payment Actions */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-900 dark:text-dark-text">Payment Actions</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedAppointment.payment_status === 'pending' && (
                   <button
                     onClick={() => sendPaymentReminder(selectedAppointment)}
                     disabled={loadingAction === `payment-${selectedAppointment.id}`}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors disabled:opacity-50 text-sm font-medium"
                   >
-                    {loadingAction === `payment-${selectedAppointment.id}` ? '⏳ Sending...' : '📱 Send Payment Reminder'}
+                    ðŸ’° Send Payment Reminder
                   </button>
-                  
-                  <a
-                    href={`https://wa.me/91${selectedAppointment.phone}?text=💰 *Payment Request - Computer World*%0A%0AService: ${selectedAppointment.service_type}%0AAmount: ${selectedAppointment.service_price ? formatCurrency(selectedAppointment.service_price) : 'TBD'}%0A%0APay online: https://computerworld.up.railway.app/dashboard%0A%0ACall: +91-93162 56101`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors text-center"
-                  >
-                    💬 WhatsApp Payment Link
-                  </a>
-                </div>
-
-                {selectedAppointment.payment_status === 'pending' && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Manual Payment Update</h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-400 mb-3">
-                      If customer has paid offline, you can manually update the payment status.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={async () => {
-                          try {
-                            const amount = prompt('Enter the amount paid by customer:')
-                            if (amount && !isNaN(amount)) {
-                              await supabase
-                                .from('appointments')
-                                .update({
-                                  payment_status: 'paid',
-                                  payment_method: 'cash',
-                                  service_price: parseFloat(amount),
-                                  payment_date: new Date().toISOString()
-                                })
-                                .eq('id', selectedAppointment.id)
-                              
-                              toast.success('Payment status updated to paid')
-                              fetchAllData()
-                              setShowPaymentModal(false)
-                              setSelectedAppointment(null)
-                            }
-                          } catch (error) {
-                            toast.error('Failed to update payment status')
-                          }
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
-                      >
-                        💵 Mark as Cash Paid
-                      </button>
-                      
-                      <button
-                        onClick={async () => {
-                          try {
-                            const amount = prompt('Enter the amount paid by customer:')
-                            if (amount && !isNaN(amount)) {
-                              await supabase
-                                .from('appointments')
-                                .update({
-                                  payment_status: 'paid',
-                                  payment_method: 'upi',
-                                  service_price: parseFloat(amount),
-                                  payment_date: new Date().toISOString()
-                                })
-                                .eq('id', selectedAppointment.id)
-                              
-                              toast.success('Payment status updated to paid')
-                              fetchAllData()
-                              setShowPaymentModal(false)
-                              setSelectedAppointment(null)
-                            }
-                          } catch (error) {
-                            toast.error('Failed to update payment status')
-                          }
-                        }}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
-                      >
-                        📱 Mark as UPI Paid
-                      </button>
-                    </div>
-                  </div>
                 )}
+                
+                <button
+                  onClick={() => deleteAppointment(selectedAppointment.id)}
+                  disabled={loadingAction === `delete-${selectedAppointment.id}`}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors disabled:opacity-50 text-sm font-medium"
+                >
+                  ðŸ—‘ï¸ Delete Appointment
+                </button>
               </div>
-
-              {/* Payment History */}
-              {selectedAppointment.payment_date && (
-                <div className="bg-gray-50 dark:bg-dark-bg rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 dark:text-dark-text mb-2">Payment History</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Payment Date:</span>
-                      <span className="font-medium">{formatDate(selectedAppointment.payment_date)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Payment Method:</span>
-                      <span className="font-medium">{selectedAppointment.payment_method || 'Not specified'}</span>
-                    </div>
-                    {selectedAppointment.instamojo_payment_id && (
-                      <div className="flex justify-between">
-                        <span>Transaction ID:</span>
-                        <span className="font-medium text-xs">{selectedAppointment.instamojo_payment_id}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Close Button */}
-            <div className="mt-8 flex justify-center">
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-              >
-                Close Payment Panel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Action Button for Mobile */}
-      <div className="fixed bottom-6 right-6 md:hidden">
-        <div className="flex flex-col space-y-3">
-          <button
-            onClick={() => setActiveTab('appointments')}
-            className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all ${
-              stats.pending > 0 
-                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
-                : 'bg-yellow-500 hover:bg-yellow-600 text-white'
-            } relative`}
-          >
-            📋
-            {stats.pending > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {stats.pending}
-              </span>
-            )}
-          </button>
-          
-          <button
-            onClick={fetchAllData}
-            className="w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all"
-          >
-            🔄
-          </button>
-          
-          <a
-            href="tel:+919316256101"
-            className="w-12 h-12 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all"
-          >
-            📞
-          </a>
-        </div>
-      </div>
-
-      {/* Loading Overlay */}
-      {loadingAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-40">
-          <div className="bg-white dark:bg-dark-card p-6 rounded-xl shadow-xl">
-            <div className="flex items-center space-x-3">
-              <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-gray-900 dark:text-dark-text font-medium">Processing...</span>
             </div>
           </div>
         </div>
@@ -2306,4 +1735,3 @@ export default function AdminDashboard() {
     </div>
   )
 }
-
