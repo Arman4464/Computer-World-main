@@ -1,0 +1,30 @@
+{
+  "name": "Computer World Dev Environment",
+  "image": "mcr.microsoft.com/vscode/devcontainers/javascript-node:18",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "forwardPorts": [3000, 54321],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js App",
+      "onAutoForward": "openPreview"
+    },
+    "54321": {
+      "label": "Supabase Studio",
+      "onAutoForward": "ignore"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-typescript-next",
+        "supabase.supabase"
+      ]
+    }
+  }
+}
